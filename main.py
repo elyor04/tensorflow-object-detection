@@ -181,7 +181,7 @@ while True:
     prevTime = currTime
 
     cv.putText(
-        image_np, fps, (5, 30), cv.FONT_HERSHEY_COMPLEX_SMALL, 2.0, (255, 0, 0), 2
+        image_np, fps, (5, 35), cv.FONT_HERSHEY_COMPLEX_SMALL, 2.0, (255, 0, 0), 2
     )
 
     cv.imshow("Object Detection", image_np)
