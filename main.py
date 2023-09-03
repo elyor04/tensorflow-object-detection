@@ -25,10 +25,12 @@ def visualize_boxes_and_labels(
     class_names: dict[int, str],
 ) -> np.ndarray:
     hg, wd = image.shape[:2]
+
     for (ymin, xmin, ymax, xmax), cls_id, score in zip(boxes, class_ids, scores):
         perc = int(score * 100)
         if perc < 60:
             continue
+
         xmin, ymin = int(xmin * wd), int(ymin * hg)
         xmax, ymax = int(xmax * wd), int(ymax * hg)
         name = class_names[cls_id]
@@ -55,6 +57,7 @@ def visualize_boxes_and_labels(
             image, (xmin, ymin), (min(gtx + 3, wd), min(gty + 4, hg)), color, -1
         )
         cv.putText(image, name.capitalize(), (xmin, gty), font, 2.0, (0, 0, 0), 2)
+
     return image
 
 
@@ -182,7 +185,7 @@ while True:
     )
 
     cv.imshow("Object Detection", image_np)
-    if cv.waitKey(2) == 27:
+    if cv.waitKey(2) == 27:  # esc
         break
 
 cap.release()
