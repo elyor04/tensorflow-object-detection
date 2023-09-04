@@ -141,8 +141,6 @@ class DetectionModel:
 
     @tf.function
     def detect(self, image):
-        """Detect objects in image."""
-
         image, shapes = self.model.preprocess(image)
         prediction_dict = self.model.predict(image, shapes)
         detections = self.model.postprocess(prediction_dict, shapes)
