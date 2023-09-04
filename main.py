@@ -61,10 +61,9 @@ def visualize_boxes_and_labels(
     return image
 
 
-class DetectionModel(object):
+class DetectionModel:
     def __init__(self, dataDir: str = "data") -> None:
         self.DATA_DIR = dataDir
-        self.MODELS_DIR = path.join(self.DATA_DIR, "models")
 
         self.MODEL_DATE = "20200711"
         self.MODEL_NAME = "ssd_mobilenet_v2_320x320_coco17_tpu-8"  # "ssd_mobilenet_v2_fpnlite_320x320_coco17_tpu-8"
@@ -77,31 +76,29 @@ class DetectionModel(object):
             self.MODELS_DOWNLOAD_BASE + self.MODEL_DATE + "/" + self.MODEL_TAR_FILENAME
         )
 
-        self.PATH_TO_MODEL_TAR = path.join(self.MODELS_DIR, self.MODEL_TAR_FILENAME)
-        self.PATH_TO_CKPT = path.join(self.MODELS_DIR, self.MODEL_NAME, "checkpoint/")
-        self.PATH_TO_CFG = path.join(
-            self.MODELS_DIR, self.MODEL_NAME, "pipeline.config"
-        )
+        self.PATH_TO_MODEL_TAR = path.join(self.DATA_DIR, self.MODEL_TAR_FILENAME)
+        self.PATH_TO_CKPT = path.join(self.DATA_DIR, self.MODEL_NAME, "checkpoint/")
+        self.PATH_TO_CFG = path.join(self.DATA_DIR, self.MODEL_NAME, "pipeline.config")
 
         self.LABEL_FILENAME = "mscoco_label_map.pbtxt"
         self.LABELS_DOWNLOAD_BASE = "https://raw.githubusercontent.com/tensorflow/models/master/research/object_detection/data/"
         self.PATH_TO_LABELS = path.join(
-            self.MODELS_DIR, self.MODEL_NAME, self.LABEL_FILENAME
+            self.DATA_DIR, self.MODEL_NAME, self.LABEL_FILENAME
         )
 
         self.model = None
+        self.names = None
 
-    def createModelDir(self) -> None:
-        for dir in [self.DATA_DIR, self.MODELS_DIR]:
-            if not path.exists(dir):
-                os.mkdir(dir)
+    def createDataDir(self) -> None:
+        if not path.exists(self.DATA_DIR):
+            os.mkdir(self.DATA_DIR)
 
     def downloadModel(self) -> None:
         if not path.exists(self.PATH_TO_CKPT):
             print("Downloading model. This may take a while... ", end="")
             urlretrieve(self.MODEL_DOWNLOAD_LINK, self.PATH_TO_MODEL_TAR)
             tar_file = tr.open(self.PATH_TO_MODEL_TAR)
-            tar_file.extractall(self.MODELS_DIR)
+            tar_file.extractall(self.DATA_DIR)
             tar_file.close()
             os.remove(self.PATH_TO_MODEL_TAR)
             print("Done")
@@ -129,31 +126,31 @@ class DetectionModel(object):
         ckpt = tf.compat.v2.train.Checkpoint(model=self.model)
         ckpt.restore(path.join(self.PATH_TO_CKPT, "ckpt-0")).expect_partial()
 
+    def loadNames(self) -> None:
+        category_index = label_map_util.create_category_index_from_labelmap(
+            dm.PATH_TO_LABELS, use_display_name=True
+        )
+        self.names = {vl["id"]: vl["name"] for vl in category_index.values()}
+
     def prepareAll(self) -> None:
-        self.createModelDir()
+        self.createDataDir()
         self.downloadModel()
         self.downloadLabels()
         self.loadModel()
+        self.loadNames()
+
+    @tf.function
+    def detect(self, image):
+        """Detect objects in image."""
+
+        image, shapes = self.model.preprocess(image)
+        prediction_dict = self.model.predict(image, shapes)
+        detections = self.model.postprocess(prediction_dict, shapes)
+        return (detections, prediction_dict, tf.reshape(shapes, [-1]))
 
 
 dm = DetectionModel()
 dm.prepareAll()
-
-
-@tf.function
-def detect_fn(image):
-    """Detect objects in image."""
-
-    image, shapes = dm.model.preprocess(image)
-    prediction_dict = dm.model.predict(image, shapes)
-    detections = dm.model.postprocess(prediction_dict, shapes)
-    return (detections, prediction_dict, tf.reshape(shapes, [-1]))
-
-
-category_index = label_map_util.create_category_index_from_labelmap(
-    dm.PATH_TO_LABELS, use_display_name=True
-)
-names = {vl["id"]: vl["name"] for vl in category_index.values()}
 
 cap = cv.VideoCapture(0)
 prevTime = 0
@@ -168,13 +165,13 @@ while True:
         continue
 
     input_tensor = tf.convert_to_tensor(np.expand_dims(image_np, 0), dtype=tf.float32)
-    detections, predictions_dict, shapes = detect_fn(input_tensor)
+    detections, predictions_dict, shapes = dm.detect(input_tensor)
 
     boxes = detections["detection_boxes"][0].numpy()
     classes = (detections["detection_classes"][0].numpy() + 1).astype(int)
     scores = detections["detection_scores"][0].numpy()
 
-    visualize_boxes_and_labels(image_np, boxes, classes, scores, names)
+    visualize_boxes_and_labels(image_np, boxes, classes, scores, dm.names)
 
     currTime = time()
     fps = f"FPS: {round(1 / (currTime - prevTime), 1)}"
