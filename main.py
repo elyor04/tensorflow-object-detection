@@ -39,7 +39,7 @@ def visualize_boxes_and_labels(
             color = colors[name]
         else:
             color = (randint(0, 255), randint(0, 255), randint(0, 255))
-            while (True not in [(pxl > 200) for pxl in color]) or (
+            while (True not in [(pxl > 210) for pxl in color]) or (
                 color in colors.values()
             ):
                 color = (randint(0, 255), randint(0, 255), randint(0, 255))
